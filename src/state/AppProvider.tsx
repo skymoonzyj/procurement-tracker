@@ -45,8 +45,10 @@ export function AppProvider({ children }: PropsWithChildren) {
   }, [])
 
   const value = useMemo(() => ({ state, dispatch, refresh }), [state, dispatch, refresh])
-  if (state.loading) return <AppContext.Provider value={value}><div role="status">加载中…</div></AppContext.Provider>
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+  return <AppContext.Provider value={value}>
+    {state.loading && <div className="loading-bar" role="status">加载中…</div>}
+    {children}
+  </AppContext.Provider>
 }
 
 export function useApp(): AppContextValue {
