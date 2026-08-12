@@ -50,11 +50,15 @@
       ]
     },
     "nsis": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-nsis.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-portable.${ext}"
     }
   }
 }

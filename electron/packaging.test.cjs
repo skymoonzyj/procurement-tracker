@@ -28,6 +28,14 @@ test('Electron packaging metadata and scripts are configured', () => {
   assert.match(build.artifactName, /\$\{productName\}/);
   assert.match(build.artifactName, /\$\{version\}/);
 
+  const nsisArtifactName = build.nsis?.artifactName;
+  const portableArtifactName = build.portable?.artifactName;
+  assert.equal(typeof nsisArtifactName, 'string', 'NSIS must define a target-specific artifact name');
+  assert.equal(typeof portableArtifactName, 'string', 'portable must define a target-specific artifact name');
+  assert.notEqual(nsisArtifactName, portableArtifactName, 'NSIS and portable artifact names must not collide');
+  assert.match(nsisArtifactName, /nsis/);
+  assert.match(portableArtifactName, /portable/);
+
   const targets = Array.isArray(build.win.target) ? build.win.target : [build.win.target];
   const targetNames = targets.map((target) => typeof target === 'string' ? target : target.target);
   assert.ok(targetNames.includes('nsis'));

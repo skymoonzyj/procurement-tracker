@@ -42,6 +42,22 @@ Final post-generation-guard run: `npm run test:run` — 10 files/30 tests passed
 - Persistence errors can appear as a toast when IndexedDB is unavailable (expected in non-browser test environments); state changes remain visible in-memory.
 - Delete is implemented through `replaceAll` because the reducer currently has no `removePurchase` action.
 
+## Packaging artifact collision fix
+
+The Windows packaging metadata now sets target-specific `artifactName` templates under `build.nsis` and `build.portable`, so a single `npm run dist:win` invocation emits distinct installer and portable filenames without a manual copy/rename step. `electron/packaging.test.cjs` asserts both names are present, target-specific, and distinct.
+
+TDD/verification:
+
+- Regression test was RED before the metadata change (`NSIS must define a target-specific artifact name`).
+- `node --test electron/packaging.test.cjs` — 5 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build` — passed.
+- `npm run dist:win -- --config.directories.output=release-packaging-check` — passed; generated distinct artifacts:
+  - `采购报销台账-1.0.0-win-x64-nsis.exe` — 116,648,579 bytes — SHA-256 `B0B402E460AB56EBD36ACAD68CAF57D3445A7A61F89C0D192767CD801ED75332`
+  - `采购报销台账-1.0.0-win-x64-portable.exe` — 116,418,768 bytes — SHA-256 `2117B5F87998DE9DFAD6F765E4AC98D7651DD55FC171B2670B6E964847F488E1`
+
+The packaging check output is intentionally separate from the existing `release/` directory; no release binaries are staged.
+
 ## Review fixes (follow-up)
 
 - Guarded `toCents` conversion in `PurchaseForm`; malformed amounts now produce inline Chinese validation and never escape submit. Preview converts yuan to cents before multiplication (`2 × 125.50` → `¥251.00`).
