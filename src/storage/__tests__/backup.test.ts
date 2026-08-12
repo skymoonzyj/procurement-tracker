@@ -15,7 +15,7 @@ const purchase: PurchaseRecord = {
   notes: '备注',
   reimbursed: true,
   reimbursedAt: '2026-08-02T01:02:03.000Z',
-  invoiceStatus: 'attached',
+  invoiceStatus: 'matched',
   invoiceIds: ['invoice-1'],
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-02T00:00:00.000Z',
@@ -36,14 +36,14 @@ const invoice: InvoiceRecord = {
 
 describe('backup serialization', () => {
   it('rejects invalid exportedAt and incomplete required purchase metadata', async () => {
-    const valid = await serializeBackup({ purchases: [purchase], invoices: [] })
+    const valid = await serializeBackup({ purchases: [{ ...purchase, invoiceIds: [], invoiceStatus: 'missing' }], invoices: [] })
     await expect(restoreBackup({ ...valid, exportedAt: 'not-a-date' })).rejects.toThrow(/导出时间/)
     await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], itemName: '' }] })).rejects.toThrow(/采购记录/)
     await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], purchasedAt: '2026-02-31' }] })).rejects.toThrow(/采购记录/)
   })
 
   it('rejects non-canonical invoice base64 and size mismatches', async () => {
-    const valid = await serializeBackup({ purchases: [], invoices: [invoice] })
+    const valid = await serializeBackup({ purchases: [], invoices: [{ ...invoice, matchStatus: 'needs_review', matchedPurchaseIds: [] }] })
     await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], blobBase64: 'AQI' }] })).rejects.toThrow(/发票记录/)
     await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], sizeBytes: 99 }] })).rejects.toThrow(/发票记录/)
   })
@@ -79,11 +79,27 @@ describe('backup serialization', () => {
   })
 
   it('accepts decimal quantities representable to two places', async () => {
-    const backup = await serializeBackup({ purchases: [{ ...purchase, quantity: 0.29, invoiceIds: [] }], invoices: [] })
+    const backup = await serializeBackup({ purchases: [{ ...purchase, quantity: 0.29, totalPriceCents: 358, invoiceIds: [], invoiceStatus: 'missing' }], invoices: [] })
     await expect(restoreBackup(backup)).resolves.toBeTruthy()
   })
 
   it('exposes snapshot persistence as one atomic operation', () => {
     expect(typeof persistSnapshot).toBe('function')
+  })
+
+  it('rejects duplicate IDs, inconsistent totals, and reimbursement timestamps', async () => {
+    const valid = await serializeBackup({ purchases: [{ ...purchase, invoiceStatus: 'matched' }], invoices: [invoice] })
+    await expect(restoreBackup({ ...valid, purchases: [...valid.purchases, { ...valid.purchases[0] }] })).rejects.toThrow(/重复/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], totalPriceCents: 1 }] })).rejects.toThrow(/总价/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], reimbursed: false }] })).rejects.toThrow(/报销/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], reimbursed: true, reimbursedAt: undefined }] })).rejects.toThrow(/报销/)
+  })
+
+  it('rejects dangling or asymmetric invoice references and contradictory statuses', async () => {
+    const valid = await serializeBackup({ purchases: [{ ...purchase, invoiceStatus: 'matched' }], invoices: [invoice] })
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], invoiceIds: ['missing-invoice'] }] })).rejects.toThrow(/关联|引用/)
+    await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], matchedPurchaseIds: [] }] })).rejects.toThrow(/关联|引用/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], invoiceStatus: 'attached' }] })).rejects.toThrow(/状态/)
+    await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], matchStatus: 'unmatched' }] })).rejects.toThrow(/状态|关联/)
   })
 })

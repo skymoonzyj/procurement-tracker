@@ -2,14 +2,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppProvider } from '../../state/AppProvider'
 import { SettingsPage } from '../SettingsPage'
-import { BackupDialog } from '../../components/settings/BackupDialog'
 import * as db from '../../storage/db'
 import type { PurchaseRecord } from '../../domain/types'
+import { BackupDialog } from '../../components/settings/BackupDialog'
 
 const purchase: PurchaseRecord = {
   id: 'existing', purchasedAt: '2026-08-01', itemUrl: 'https://example.com', itemName: '已有记录', quantity: 1,
   unitPriceCents: 100, totalPriceCents: 100, storageLink: '', notes: '', reimbursed: false,
-  invoiceStatus: 'missing', invoiceIds: ['invoice-existing'], createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+  invoiceStatus: 'missing', invoiceIds: [], createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
 }
 
 beforeEach(() => {
@@ -59,5 +59,25 @@ describe('settings backup controls', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认覆盖导入' }))
     expect(await screen.findByText(/恢复失败/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '确认覆盖导入' })).not.toBeDisabled()
+  })
+
+  it('calls onClear after explicit confirmation and reports success or failure', async () => {
+    const onClear = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('disk offline'))
+    render(<BackupDialog purchases={[]} invoices={[]} onRestore={vi.fn()} onClear={onClear} />)
+    const confirmation = screen.getByLabelText('清空本机数据确认')
+    fireEvent.change(confirmation, { target: { value: '清空本机数据' } })
+    fireEvent.click(screen.getByRole('button', { name: '清空本机数据' }))
+    await waitFor(() => expect(onClear).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('status')).toHaveTextContent('本机数据已清空')
+
+    fireEvent.change(confirmation, { target: { value: '清空本机数据' } })
+    fireEvent.click(screen.getByRole('button', { name: '清空本机数据' }))
+    await waitFor(() => expect(onClear).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('alert')).toHaveTextContent('清空失败')
+
+    fireEvent.change(confirmation, { target: { value: '清空本机数据' } })
+    fireEvent.click(screen.getByRole('button', { name: '清空本机数据' }))
+    await waitFor(() => expect(onClear).toHaveBeenCalledTimes(3))
+    expect(screen.getByRole('alert')).toHaveTextContent('清空失败')
   })
 })

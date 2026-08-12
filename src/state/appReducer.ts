@@ -26,12 +26,30 @@ export type AppAction =
   | { type: 'updateInvoice'; invoice: InvoiceRecord }
   | { type: 'confirmInvoiceMatch'; invoiceId: string; purchaseIds: string[] }
   | { type: 'removeInvoice'; id: string }
+  | { type: 'removePurchase'; id: string }
   | { type: 'replaceAll'; purchases: PurchaseRecord[]; invoices: InvoiceRecord[] }
   | { type: 'setHydrated'; purchases: PurchaseRecord[]; invoices: InvoiceRecord[] }
   | { type: 'setPersistenceError'; error?: string }
 
 function withDerived(state: Omit<AppState, 'metrics'> & { metrics?: DashboardMetrics }): AppState {
   return { ...state, metrics: calculateMetrics(state.purchases) }
+}
+
+function derivePurchaseInvoiceStatus(purchase: PurchaseRecord, invoices: InvoiceRecord[]): PurchaseRecord['invoiceStatus'] {
+  if (purchase.invoiceIds.length === 0) return 'missing'
+  const linked = purchase.invoiceIds
+    .map((id) => invoices.find((invoice) => invoice.id === id))
+    .filter((invoice): invoice is InvoiceRecord => Boolean(invoice))
+  if (linked.some((invoice) => invoice.matchStatus === 'confirmed' && invoice.matchedPurchaseIds.includes(purchase.id))) return 'matched'
+  // Keep a review marker while links remain unresolved. If records are not yet
+  // available (legacy/in-memory state), preserve the existing stronger status.
+  if (linked.length === 0 && purchase.invoiceStatus === 'matched') return 'matched'
+  return purchase.invoiceStatus === 'needs_review' ? 'needs_review' : 'attached'
+}
+
+function deriveInvoiceMatchStatus(invoice: InvoiceRecord, matchedPurchaseIds: string[]): InvoiceRecord['matchStatus'] {
+  if (matchedPurchaseIds.length > 0) return 'confirmed'
+  return invoice.parseStatus === 'failed' || invoice.matchStatus === 'needs_review' ? 'needs_review' : 'unmatched'
 }
 
 export function appReducer(state: AppState, action: AppAction): AppState {
@@ -56,47 +74,52 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         persistenceError: undefined,
       })
     }
-    case 'linkInvoice':
-      return withDerived({
-        ...state,
-        purchases: state.purchases.map((purchase) => purchase.id === action.purchaseId
-          ? { ...purchase, invoiceIds: purchase.invoiceIds.includes(action.invoiceId) ? purchase.invoiceIds : [...purchase.invoiceIds, action.invoiceId], invoiceStatus: 'attached' }
-          : purchase),
-        invoices: state.invoices.map((invoice) => invoice.id === action.invoiceId
-          ? { ...invoice, matchedPurchaseIds: invoice.matchedPurchaseIds.includes(action.purchaseId) ? invoice.matchedPurchaseIds : [...invoice.matchedPurchaseIds, action.purchaseId], matchStatus: 'confirmed' }
-          : invoice),
-        persistenceError: undefined,
+    case 'linkInvoice': {
+      if (!state.purchases.some((purchase) => purchase.id === action.purchaseId) || !state.invoices.some((invoice) => invoice.id === action.invoiceId)) return state
+      const invoices = state.invoices.map((invoice) => invoice.id === action.invoiceId
+        ? { ...invoice, matchedPurchaseIds: invoice.matchedPurchaseIds.includes(action.purchaseId) ? invoice.matchedPurchaseIds : [...invoice.matchedPurchaseIds, action.purchaseId], matchStatus: 'confirmed' as const }
+        : invoice)
+      const purchases = state.purchases.map((purchase) => purchase.id === action.purchaseId
+        ? { ...purchase, invoiceIds: purchase.invoiceIds.includes(action.invoiceId) ? purchase.invoiceIds : [...purchase.invoiceIds, action.invoiceId], invoiceStatus: 'matched' as const }
+        : purchase)
+      return withDerived({ ...state, purchases, invoices, persistenceError: undefined })
+    }
+    case 'unlinkInvoice': {
+      const invoices = state.invoices.map((invoice) => invoice.id === action.invoiceId
+        ? (() => {
+            const matchedPurchaseIds = invoice.matchedPurchaseIds.filter((id) => id !== action.purchaseId)
+            return { ...invoice, matchedPurchaseIds, matchStatus: deriveInvoiceMatchStatus(invoice, matchedPurchaseIds) }
+          })()
+        : invoice)
+      const purchases = state.purchases.map((purchase) => {
+        if (purchase.id !== action.purchaseId) return purchase
+        const invoiceIds = purchase.invoiceIds.filter((id) => id !== action.invoiceId)
+        const nextPurchase = { ...purchase, invoiceIds }
+        return { ...nextPurchase, invoiceStatus: derivePurchaseInvoiceStatus(nextPurchase, invoices) }
       })
-    case 'unlinkInvoice':
-      return withDerived({
-        ...state,
-        purchases: state.purchases.map((purchase) => purchase.id === action.purchaseId
-          ? { ...purchase, invoiceIds: purchase.invoiceIds.filter((id) => id !== action.invoiceId), invoiceStatus: purchase.invoiceIds.length <= 1 ? 'missing' : purchase.invoiceStatus }
-          : purchase),
-        invoices: state.invoices.map((invoice) => invoice.id === action.invoiceId
-          ? { ...invoice, matchedPurchaseIds: invoice.matchedPurchaseIds.filter((id) => id !== action.purchaseId), matchStatus: invoice.matchedPurchaseIds.length <= 1 ? 'unmatched' : invoice.matchStatus }
-          : invoice),
-        persistenceError: undefined,
-      })
+      return withDerived({ ...state, purchases, invoices, persistenceError: undefined })
+    }
     case 'addInvoice':
       return { ...state, invoices: [...state.invoices, action.invoice], persistenceError: undefined }
     case 'updateInvoice':
       return { ...state, invoices: state.invoices.map((invoice) => invoice.id === action.invoice.id ? action.invoice : invoice), persistenceError: undefined }
     case 'confirmInvoiceMatch': {
-      const ids = new Set(action.purchaseIds)
+      const ids = new Set(action.purchaseIds.filter((id) => state.purchases.some((purchase) => purchase.id === id)))
+      const targetInvoice = state.invoices.find((invoice) => invoice.id === action.invoiceId)
+      if (!targetInvoice) return state
+      const selectedIds = [...ids]
+      const invoices = state.invoices.map((invoice) => invoice.id === action.invoiceId
+        ? { ...invoice, matchedPurchaseIds: selectedIds, matchStatus: deriveInvoiceMatchStatus(invoice, selectedIds) }
+        : invoice)
       return withDerived({
         ...state,
-        invoices: state.invoices.map((invoice) => invoice.id === action.invoiceId
-          ? { ...invoice, matchedPurchaseIds: action.purchaseIds, matchStatus: 'confirmed' }
-          : invoice),
+        invoices,
         purchases: state.purchases.map((purchase) => {
-          if (ids.has(purchase.id)) {
-            return { ...purchase, invoiceIds: purchase.invoiceIds.includes(action.invoiceId) ? purchase.invoiceIds : [...purchase.invoiceIds, action.invoiceId], invoiceStatus: 'matched' }
-          }
-          if (!purchase.invoiceIds.includes(action.invoiceId)) return purchase
-          const invoiceIds = purchase.invoiceIds.filter((id) => id !== action.invoiceId)
-          const hasConfirmedRemaining = invoiceIds.some((invoiceId) => state.invoices.find((invoice) => invoice.id === invoiceId)?.matchStatus === 'confirmed')
-          return { ...purchase, invoiceIds, invoiceStatus: invoiceIds.length === 0 ? 'missing' : hasConfirmedRemaining ? 'matched' : 'attached' }
+          const invoiceIds = ids.has(purchase.id)
+            ? purchase.invoiceIds.includes(action.invoiceId) ? purchase.invoiceIds : [...purchase.invoiceIds, action.invoiceId]
+            : purchase.invoiceIds.filter((id) => id !== action.invoiceId)
+          const nextPurchase = { ...purchase, invoiceIds }
+          return { ...nextPurchase, invoiceStatus: derivePurchaseInvoiceStatus(nextPurchase, invoices) }
         }),
         persistenceError: undefined,
       })
@@ -108,15 +131,21 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         purchases: state.purchases.map((purchase) => {
           if (!purchase.invoiceIds.includes(action.id)) return purchase
           const invoiceIds = purchase.invoiceIds.filter((id) => id !== action.id)
-          const invoiceStatus = invoiceIds.length === 0
-            ? 'missing'
-            : purchase.invoiceStatus === 'missing'
-              ? 'attached'
-              : purchase.invoiceStatus
-          return { ...purchase, invoiceIds, invoiceStatus }
+          const nextPurchase = { ...purchase, invoiceIds }
+          return { ...nextPurchase, invoiceStatus: derivePurchaseInvoiceStatus(nextPurchase, state.invoices.filter((invoice) => invoice.id !== action.id)) }
         }),
         persistenceError: undefined,
       })
+    case 'removePurchase': {
+      const purchases = state.purchases.filter((purchase) => purchase.id !== action.id)
+      const invoices = state.invoices.map((invoice) => {
+        const matchedPurchaseIds = invoice.matchedPurchaseIds.filter((id) => id !== action.id)
+        return matchedPurchaseIds.length === invoice.matchedPurchaseIds.length
+          ? invoice
+          : { ...invoice, matchedPurchaseIds, matchStatus: deriveInvoiceMatchStatus(invoice, matchedPurchaseIds) }
+      })
+      return withDerived({ ...state, purchases, invoices, persistenceError: undefined })
+    }
     case 'replaceAll':
     case 'setHydrated':
       return withDerived({ ...state, purchases: action.purchases, invoices: action.invoices, loading: false, persistenceError: undefined })

@@ -80,4 +80,31 @@ describe('appReducer', () => {
     expect(next.purchases[0].invoiceIds).toEqual(['invoice-2'])
     expect(next.purchases[0].invoiceStatus).toBe('matched')
   })
+
+  it('marks a purchase matched when linking a confirmed invoice', () => {
+    const invoice: InvoiceRecord = {
+      id: 'invoice-1', fileName: 'invoice.pdf', mimeType: 'application/pdf', sizeBytes: 3,
+      blob: new Blob(['pdf'], { type: 'application/pdf' }), uploadedAt: '2026-08-01T00:00:00.000Z',
+      rawText: '', parseStatus: 'parsed', matchStatus: 'unmatched', matchedPurchaseIds: [],
+    }
+    const state = { ...initialAppState, purchases: [makePurchase('a')], invoices: [invoice] }
+    const next = appReducer(state, { type: 'linkInvoice', purchaseId: 'a', invoiceId: 'invoice-1' })
+    expect(next.purchases[0].invoiceStatus).toBe('matched')
+    expect(next.purchases[0].invoiceIds).toEqual(['invoice-1'])
+    expect(next.invoices[0].matchStatus).toBe('confirmed')
+    expect(next.invoices[0].matchedPurchaseIds).toEqual(['a'])
+  })
+
+  it('removes a purchase from every invoice and derives unmatched invoice status', () => {
+    const invoice: InvoiceRecord = {
+      id: 'invoice-1', fileName: 'invoice.pdf', mimeType: 'application/pdf', sizeBytes: 3,
+      blob: new Blob(['pdf'], { type: 'application/pdf' }), uploadedAt: '2026-08-01T00:00:00.000Z',
+      rawText: '', parseStatus: 'parsed', matchStatus: 'confirmed', matchedPurchaseIds: ['a'],
+    }
+    const state = { ...initialAppState, purchases: [makePurchase('a')], invoices: [invoice] }
+    const next = appReducer(state, { type: 'removePurchase', id: 'a' })
+    expect(next.purchases).toEqual([])
+    expect(next.invoices[0].matchedPurchaseIds).toEqual([])
+    expect(next.invoices[0].matchStatus).toBe('unmatched')
+  })
 })

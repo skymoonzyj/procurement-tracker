@@ -3,14 +3,15 @@ import type { PurchaseInput } from '../../domain/types'
 import { calculateTotalCents, formatCNY, toCents } from '../../domain/money'
 import { validatePurchaseInput } from '../../domain/validation'
 
-interface PurchaseFormProps { initialValue?: PurchaseInput; onSubmit: (input: PurchaseInput) => Promise<void>; onCancel?: () => void }
+interface PurchaseFormProps { initialValue?: PurchaseInput; onSubmit: (input: PurchaseInput) => Promise<boolean>; onCancel?: () => void }
 const blank: PurchaseInput = { purchasedAt: new Date().toISOString().slice(0, 10), itemName: '', quantity: '1', unitPriceCents: '', itemUrl: '', storageLink: '', notes: '' }
 export function PurchaseForm({ initialValue, onSubmit, onCancel }: PurchaseFormProps) {
   const [value, setValue] = useState<PurchaseInput>(initialValue ?? blank)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  useEffect(() => { setValue(initialValue ?? blank); setErrors({}) }, [initialValue])
-  const update = (key: keyof PurchaseInput, next: string) => setValue(prev => ({ ...prev, [key]: next }))
+  useEffect(() => { setValue(initialValue ?? blank); setErrors({}); setFormError('') }, [initialValue])
+  const update = (key: keyof PurchaseInput, next: string) => { setFormError(''); setValue(prev => ({ ...prev, [key]: next })) }
   const quantity = Number(value.quantity)
   let preview = 0
   try {
@@ -26,7 +27,14 @@ export function PurchaseForm({ initialValue, onSubmit, onCancel }: PurchaseFormP
     const validation = validatePurchaseInput(next)
     if (Object.keys(validation).length) { setErrors(validation); return }
     setSaving(true)
-    try { await onSubmit(next); setValue(blank); setErrors({}) } finally { setSaving(false) }
+    setFormError('')
+    try {
+      const ok = await onSubmit(next)
+      if (!ok) { setFormError('保存失败，请重试'); return }
+      setValue(blank); setErrors({})
+    } catch (cause) {
+      setFormError(`保存失败：${cause instanceof Error ? cause.message : '未知错误'}，请重试`)
+    } finally { setSaving(false) }
   }
   return <form className="purchase-form" onSubmit={submit} noValidate>
     <div className="form-grid">
@@ -38,6 +46,7 @@ export function PurchaseForm({ initialValue, onSubmit, onCancel }: PurchaseFormP
       <label>存储链接<input type="url" value={value.storageLink ?? ''} onChange={e => update('storageLink', e.target.value)} placeholder="可选" /></label>
       <label className="wide">备注<textarea value={value.notes ?? ''} onChange={e => update('notes', e.target.value)} /></label>
     </div>
+    {formError && <p className="field-error" role="alert">{formError}</p>}
     <div className="form-footer"><span className="total-preview">总价预览 <strong>{formatCNY(preview)}</strong></span><div><button type="button" className="button secondary" onClick={onCancel}>取消</button><button className="button primary" disabled={saving}>{saving ? '保存中…' : '保存采购记录'}</button></div></div>
   </form>
 }
