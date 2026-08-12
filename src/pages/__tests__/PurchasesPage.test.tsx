@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../App'
 import { AppProvider, useApp } from '../../state/AppProvider'
-import { invoiceRepo, purchaseRepo } from '../../storage/db'
+import * as db from '../../storage/db'
+import { PurchaseTable } from '../../components/purchases/PurchaseTable'
 import type { PurchaseRecord } from '../../domain/types'
 
 const makeRecord = (id: string, itemName: string, totalPriceCents: number): PurchaseRecord => ({
@@ -13,11 +14,12 @@ const makeRecord = (id: string, itemName: string, totalPriceCents: number): Purc
 })
 
 afterEach(() => vi.restoreAllMocks())
+beforeEach(() => vi.spyOn(db, 'persistSnapshot').mockResolvedValue(undefined))
 
 describe('purchase page interactions', () => {
   it('submits a purchase and shows computed total with a selection checkbox', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
 
     await waitFor(() => expect(screen.getByRole('heading', { name: '采购记录' })).toBeInTheDocument())
@@ -32,8 +34,8 @@ describe('purchase page interactions', () => {
   })
 
   it('bulk marks selected rows reimbursed and removes their totals from overview pending total', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([makeRecord('a', '键盘', 1000), makeRecord('b', '鼠标', 2000), makeRecord('c', '显示器', 3000)])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([makeRecord('a', '键盘', 1000), makeRecord('b', '鼠标', 2000), makeRecord('c', '显示器', 3000)])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
 
     await waitFor(() => expect(screen.getByRole('heading', { name: '采购记录' })).toBeInTheDocument())
@@ -50,8 +52,8 @@ describe('purchase page interactions', () => {
   })
 
   it('shows inline validation for malformed amount without throwing', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
     await waitFor(() => expect(screen.getByRole('heading', { name: '采购记录' })).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('商品名称'), { target: { value: '测试' } })
@@ -61,11 +63,11 @@ describe('purchase page interactions', () => {
   })
 
   it('filters across links and notes and sorts newest purchase first', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([
       { ...makeRecord('old', '旧商品', 100), purchasedAt: '2026-01-01', itemUrl: 'https://example.com/needle' },
       { ...makeRecord('new', '新商品', 200), purchasedAt: '2026-08-01', notes: 'needle' },
     ])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
     await waitFor(() => expect(screen.getByText('新商品')).toBeInTheDocument())
     const rows = screen.getAllByRole('row').slice(1)
@@ -76,8 +78,8 @@ describe('purchase page interactions', () => {
   })
 
   it('can restore selected rows to pending and shows action feedback', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([makeRecord('a', '键盘', 1000)])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([makeRecord('a', '键盘', 1000)])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
     await waitFor(() => expect(screen.getByText('键盘')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('checkbox', { name: '选择键盘' }))
@@ -89,13 +91,27 @@ describe('purchase page interactions', () => {
   })
 
   it('opens the clicked overview row in the purchase editor', async () => {
-    vi.spyOn(purchaseRepo, 'list').mockResolvedValue([makeRecord('edit-me', '待编辑商品', 1500)])
-    vi.spyOn(invoiceRepo, 'list').mockResolvedValue([])
+    vi.spyOn(db.purchaseRepo, 'list').mockResolvedValue([makeRecord('edit-me', '待编辑商品', 1500)])
+    vi.spyOn(db.invoiceRepo, 'list').mockResolvedValue([])
     render(<AppProvider><App /></AppProvider>)
     await waitFor(() => expect(screen.getByText('待编辑商品')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '概览' }))
     fireEvent.click(screen.getByText('待编辑商品'))
     await waitFor(() => expect(screen.getByRole('heading', { name: '采购记录' })).toBeInTheDocument())
     expect(screen.getByLabelText('商品名称')).toHaveValue('待编辑商品')
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: '概览' }))
+    fireEvent.click(screen.getByRole('button', { name: '采购记录' }))
+    expect(screen.getByLabelText('商品名称')).toHaveValue('')
+  })
+
+  it('keeps bulk selection and reports failure when persistence rejects', async () => {
+    const failure = vi.fn().mockRejectedValue(new Error('disk full'))
+    render(<PurchaseTable records={[makeRecord('fail', '失败记录', 1000)]} selectedIds={['fail']} onSelectionChange={() => undefined} onReimburse={failure} onEdit={() => undefined} onDelete={async () => undefined} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择失败记录' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择失败记录' }))
+    fireEvent.click(screen.getByRole('button', { name: '批量标记已报销' }))
+    await waitFor(() => expect(screen.getByText('批量操作失败，请重试')).toBeInTheDocument())
+    expect(screen.getByRole('checkbox', { name: '选择失败记录' })).toBeChecked()
   })
 })

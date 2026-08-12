@@ -15,6 +15,23 @@ Added `src/pages/__tests__/PurchasesPage.test.tsx` before production UI. Initial
 - `npm run typecheck` — passed.
 - `npm run build` — passed (`vite v8.2.1`, 31 modules transformed).
 
+## Scoped re-review fixes
+
+- `AppShell` now clears `pendingEdit` on save, cancel, and navigation, so stale editors do not reopen after leaving and returning.
+- `AppProvider.dispatch` now returns `Promise<boolean>`; persistence failures resolve `false` after setting the persistence error. `PurchasesPage` clears bulk selection only on `true`, while `PurchaseTable` retains selection and displays failure feedback otherwise.
+- Hydration replay persistence now catches failures and resolves queued mutation promises safely (no unhandled rejection/toast gap).
+- Concurrent refreshes use a generation guard so stale responses cannot overwrite newer hydration state.
+- Hydration regression now asserts queued reimbursement survives hydration (`服务端记录:true`).
+
+Re-review verification:
+
+- `npm run test:run -- src/pages/__tests__/PurchasesPage.test.tsx src/state/__tests__/hydrationMutation.test.tsx` — 2 files, 8 tests passed.
+- `npm run test:run` — 10 files, 30 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build` — passed.
+
+Final post-generation-guard run: `npm run test:run` — 10 files/30 tests passed; `npm run typecheck` and `npm run build` passed.
+
 ## Files
 
 - Modified: `src/App.tsx`, `src/main.tsx`, `src/state/AppProvider.tsx`

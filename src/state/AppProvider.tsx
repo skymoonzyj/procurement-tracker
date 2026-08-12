@@ -4,7 +4,7 @@ import { appReducer, initialAppState, type AppAction, type AppState } from './ap
 
 interface AppContextValue {
   state: AppState
-  dispatch: (action: AppAction) => void
+  dispatch: (action: AppAction) => Promise<boolean>
   refresh: () => Promise<void>
 }
 
@@ -14,36 +14,50 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [state, baseDispatch] = useReducer(appReducer, initialAppState)
   const stateRef = useRef(state)
   const hydratedRef = useRef(false)
-  const queuedActionsRef = useRef<AppAction[]>([])
+  const refreshGenerationRef = useRef(0)
+  const queuedActionsRef = useRef<Array<{ action: AppAction; resolve: (ok: boolean) => void }>>([])
   stateRef.current = state
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current
     try {
       const [purchases, invoices] = await Promise.all([purchaseRepo.list(), invoiceRepo.list()])
+      if (generation !== refreshGenerationRef.current) return
       const hydrated = appReducer(stateRef.current, { type: 'setHydrated', purchases, invoices })
       stateRef.current = hydrated
       hydratedRef.current = true
       baseDispatch({ type: 'setHydrated', purchases, invoices })
       const queuedActions = queuedActionsRef.current.splice(0)
-      for (const queued of queuedActions) {
+      for (const { action: queued } of queuedActions) {
         const next = appReducer(stateRef.current, queued)
         stateRef.current = next
         baseDispatch(queued)
       }
-      if (queuedActions.length) void persistSnapshot(stateRef.current)
+      if (queuedActions.length) {
+        persistSnapshot(stateRef.current).then(() => queuedActions.forEach(({ resolve }) => resolve(true))).catch((error: unknown) => {
+          baseDispatch({ type: 'setPersistenceError', error: error instanceof Error ? error.message : String(error) })
+          queuedActions.forEach(({ resolve }) => resolve(false))
+        })
+      }
     } catch (error: unknown) {
+      if (generation !== refreshGenerationRef.current) return
       if (!hydratedRef.current) {
         const hydrated = appReducer(stateRef.current, { type: 'setHydrated', purchases: stateRef.current.purchases, invoices: stateRef.current.invoices })
         stateRef.current = hydrated
         hydratedRef.current = true
         baseDispatch({ type: 'setHydrated', purchases: stateRef.current.purchases, invoices: stateRef.current.invoices })
         const queuedActions = queuedActionsRef.current.splice(0)
-        for (const queued of queuedActions) {
+        for (const { action: queued } of queuedActions) {
           const next = appReducer(stateRef.current, queued)
           stateRef.current = next
           baseDispatch(queued)
         }
-        if (queuedActions.length) void persistSnapshot(stateRef.current)
+        if (queuedActions.length) {
+          persistSnapshot(stateRef.current).then(() => queuedActions.forEach(({ resolve }) => resolve(true))).catch((persistenceError: unknown) => {
+            baseDispatch({ type: 'setPersistenceError', error: persistenceError instanceof Error ? persistenceError.message : String(persistenceError) })
+            queuedActions.forEach(({ resolve }) => resolve(false))
+          })
+        }
       }
       baseDispatch({ type: 'setPersistenceError', error: error instanceof Error ? error.message : String(error) })
     }
@@ -53,17 +67,17 @@ export function AppProvider({ children }: PropsWithChildren) {
     void refresh()
   }, [refresh])
 
-  const dispatch = useCallback((action: AppAction) => {
+  const dispatch = useCallback((action: AppAction): Promise<boolean> => {
     if (!hydratedRef.current && !['setHydrated', 'setPersistenceError'].includes(action.type)) {
-      queuedActionsRef.current.push(action)
-      return
+      return new Promise(resolve => queuedActionsRef.current.push({ action, resolve }))
     }
     const next = appReducer(stateRef.current, action)
     stateRef.current = next
     baseDispatch(action)
-    if (action.type === 'setHydrated' || action.type === 'setPersistenceError') return
-    persistSnapshot(next).catch((error: unknown) => {
+    if (action.type === 'setHydrated' || action.type === 'setPersistenceError') return Promise.resolve(true)
+    return persistSnapshot(next).then(() => true).catch((error: unknown) => {
       baseDispatch({ type: 'setPersistenceError', error: error instanceof Error ? error.message : String(error) })
+      return false
     })
   }, [])
 
