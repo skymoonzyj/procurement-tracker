@@ -1,12 +1,14 @@
 {
   "name": "procurement-reimbursement-tracker",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
+    "dev:desktop": "node electron/dev.cjs",
     "build": "vite build",
+    "dist:win": "npm run build && electron-builder --win nsis portable",
     "typecheck": "tsc --noEmit",
     "test:run": "vitest run"
   },
@@ -21,10 +23,38 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "latest",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"
+  },
+  "build": {
+    "appId": "cn.xingzheng.procurement-tracker",
+    "productName": "采购报销台账",
+    "directories": {
+      "output": "release"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "dist/**/*",
+      "electron/main.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

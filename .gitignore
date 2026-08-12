@@ -1,5 +1,10 @@
 node_modules/
 dist/
+release/
+electron-builder-cache/
+electron-builder-debug.yml
+*.desktop.log
+desktop-*.log
 .worktrees/
 .superpowers/sdd/
 *.local
