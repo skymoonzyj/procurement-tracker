@@ -35,4 +35,19 @@ describe('parseInvoiceText', () => {
     expect(result.itemName).toBe('无线键盘')
     expect(result.totalAmountCents).toBe(24680)
   })
+
+  it('stops inline label values at the next known label', () => {
+    const result = parseInvoiceText('购买商品：无线键盘 开票日期：2026-08-10 发票号码：12345678 销售方：深圳办公用品有限公司 价税合计 246.80')
+
+    expect(result.itemName).toBe('无线键盘')
+    expect(result.issueDate).toBe('2026-08-10')
+    expect(result.invoiceNumber).toBe('12345678')
+    expect(result.vendorName).toBe('深圳办公用品有限公司')
+  })
+
+  it('prefers 价税合计 over an earlier detail 金额 amount', () => {
+    const result = parseInvoiceText('商品名称：无线键盘 金额 200.00 税额 46.80 价税合计（小写）246.80')
+
+    expect(result.totalAmountCents).toBe(24680)
+  })
 })

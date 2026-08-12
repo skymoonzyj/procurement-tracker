@@ -15,11 +15,37 @@ export interface InvoiceFields {
 
 const normalize = (value: string) => value.normalize('NFKC').replace(/\s+/g, ' ').trim()
 
+const INLINE_LABELS = [
+  '货物或应税劳务、服务名称',
+  '货物或应税劳务服务名称',
+  '销售方名称',
+  '开票日期',
+  '发票号码',
+  '购买商品',
+  '项目名称',
+  '商品名称',
+  '销方名称',
+  '开票日',
+  '销售方',
+  '发票号',
+  '价税合计',
+  '日期',
+  '金额',
+  '合计',
+]
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const valueAfterLabel = (lines: string[], labels: string[]) => {
   for (const line of lines) {
     for (const label of labels) {
-      const match = line.match(new RegExp(`${label}\\s*[:：]?\\s*(.+)$`, 'i'))
-      if (match?.[1]) return match[1].trim()
+      const marker = line.match(new RegExp(`${escapeRegExp(label)}\\s*[:：]?\\s*`, 'i'))
+      if (!marker || marker.index == null) continue
+      const start = marker.index + marker[0].length
+      const rest = line.slice(start)
+      const nextLabel = new RegExp(`\\s+(?:${INLINE_LABELS.sort((a, b) => b.length - a.length).map(escapeRegExp).join('|')})\\s*[:：]?`, 'i').exec(rest)
+      const value = rest.slice(0, nextLabel?.index ?? rest.length).trim()
+      if (value) return value
     }
   }
   return null
@@ -27,11 +53,14 @@ const valueAfterLabel = (lines: string[], labels: string[]) => {
 
 const parseAmountCents = (text: string): number | null => {
   const normalized = normalize(text)
-  const match = normalized.match(/(?:价税合计|价税合计\(小写\)|金额|合计)\s*[:：]?\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/i)
-  if (!match) return null
-  const numeric = Number(match[1].replace(/,/g, ''))
-  if (!Number.isFinite(numeric)) return null
-  return Math.round(numeric * 100)
+  const amountAfter = (labelPattern: string) => {
+    const match = normalized.match(new RegExp(`${labelPattern}\\s*[:：]?\\s*[¥￥]?\\s*([\\d,]+(?:\\.\\d{1,2})?)`, 'i'))
+    if (!match) return null
+    const numeric = Number(match[1].replace(/,/g, ''))
+    return Number.isFinite(numeric) ? Math.round(numeric * 100) : null
+  }
+  // Prefer the invoice total, even when line-item 金额 appears first.
+  return amountAfter('价税合计(?:\\s*\\(小写\\))?') ?? amountAfter('金额') ?? amountAfter('合计')
 }
 
 const parseDate = (text: string): string | null => {
