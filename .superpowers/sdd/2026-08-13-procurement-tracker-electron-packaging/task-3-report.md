@@ -10,7 +10,7 @@ Commands run from the worktree root (`E:\\codex\\xingzheng\\.worktrees\\procurem
 
 | Command | Result |
 | --- | --- |
-| `npm run test:run` | BLOCKED by existing test-discovery mismatch: Vitest discovers the CommonJS `electron/*.test.cjs` node:test files and reports “No test suite found”; the 69 Vitest application tests themselves pass. |
+| `npm run test:run` | PASS — 17 files / 69 tests. The earlier RED run was temporarily BLOCKED by Vitest discovering the CommonJS `electron/*.test.cjs` node:test files and reporting “No test suite found”; commit `d513dea` fixed the Vitest exclusion, resolving that discovery mismatch. |
 | `npm run typecheck` | PASS |
 | `npm run build` | PASS |
 | `node --test electron/main.smoke.test.cjs electron/packaging.test.cjs` | PASS |
