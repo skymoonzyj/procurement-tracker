@@ -8,6 +8,10 @@ import { PurchaseTable } from '../components/purchases/PurchaseTable'
 export function PurchasesPage({ onNavigateOverview, initialEdit, onEditStateChange }: { onNavigateOverview?: () => void; initialEdit?: PurchaseRecord; onEditStateChange?: (editing: boolean) => void }) {
   const { state, dispatch } = useApp(); const [selectedIds, setSelectedIds] = useState<string[]>([]); const [editing, setEditing] = useState<PurchaseRecord | undefined>(initialEdit); const [query, setQuery] = useState(''); const [reimbursedFilter, setReimbursedFilter] = useState('all'); const [invoiceFilter, setInvoiceFilter] = useState('all'); const [fromDate, setFromDate] = useState(''); const [toDate, setToDate] = useState('')
   useEffect(() => { if (initialEdit) setEditing(initialEdit) }, [initialEdit])
+  useEffect(() => {
+    const available = new Set(state.purchases.map((purchase) => purchase.id))
+    setSelectedIds((ids) => ids.filter((id) => available.has(id)))
+  }, [state.purchases])
   const records = useMemo(() => [...state.purchases].filter(r => {
     const needle = query.trim().toLowerCase(); const haystack = [r.itemName, r.itemUrl, r.storageLink, r.notes].join(' ').toLowerCase()
     return (!needle || haystack.includes(needle)) && (reimbursedFilter === 'all' || (reimbursedFilter === 'reimbursed') === r.reimbursed) && (invoiceFilter === 'all' || r.invoiceStatus === invoiceFilter) && (!fromDate || r.purchasedAt >= fromDate) && (!toDate || r.purchasedAt <= toDate)
