@@ -7,8 +7,12 @@ function loadElectron() {
   return require('electron');
 }
 
-function resolveRendererTarget({ appPath = process.cwd(), startUrl } = {}) {
-  const devUrl = startUrl || process.env.ELECTRON_START_URL;
+function resolveRendererTarget({ appPath = process.cwd(), startUrl, app, isPackaged, env = process.env } = {}) {
+  const packaged = isPackaged ?? Boolean(app && app.isPackaged);
+  // An explicit startUrl is intentional (development/tests). Only consult the
+  // inherited environment URL while running an unpackaged Electron instance;
+  // packaged launches must always resolve to their bundled renderer.
+  const devUrl = startUrl || (!packaged ? env.ELECTRON_START_URL : undefined);
   if (devUrl) return devUrl;
   return path.resolve(appPath, 'dist', 'index.html');
 }
@@ -47,7 +51,7 @@ function createMainWindow(options = {}) {
   const shell = options.shell || electron.shell;
   const appPath = options.appPath || app.getAppPath();
   const startUrl = options.startUrl;
-  const rendererTarget = resolveRendererTarget({ appPath, startUrl });
+  const rendererTarget = resolveRendererTarget({ appPath, startUrl, app });
 
   const mainWindow = new BrowserWindow({
     width: 1440,

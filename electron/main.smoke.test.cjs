@@ -21,6 +21,27 @@ test('renderer target resolves to the absolute production index file', () => {
   );
 });
 
+test('packaged renderer ignores an inherited start URL while development keeps explicit URLs', () => {
+  const { resolveRendererTarget } = require('./main.cjs');
+  const appPath = path.join('C:', 'Program Files', 'Procurement Tracker');
+  const previous = process.env.ELECTRON_START_URL;
+  process.env.ELECTRON_START_URL = 'https://unexpected.example/remote-renderer';
+
+  try {
+    assert.equal(
+      resolveRendererTarget({ appPath, app: { isPackaged: true } }),
+      path.resolve(appPath, 'dist', 'index.html'),
+    );
+    assert.equal(
+      resolveRendererTarget({ appPath, app: { isPackaged: false }, startUrl: 'http://localhost:4173' }),
+      'http://localhost:4173',
+    );
+  } finally {
+    if (previous === undefined) delete process.env.ELECTRON_START_URL;
+    else process.env.ELECTRON_START_URL = previous;
+  }
+});
+
 test('main process exports a window factory without loading Electron in Node', () => {
   const main = require('./main.cjs');
 

@@ -2,6 +2,9 @@ import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  // Electron loads the production entry with `file://`, so emitted assets
+  // must resolve relative to dist/index.html rather than the filesystem root.
+  base: './',
   plugins: [react()],
   test: {
     environment: 'jsdom',

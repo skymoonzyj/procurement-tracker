@@ -107,3 +107,36 @@ test('required Electron entrypoint and ignore rules exist', () => {
   assert.match(gitignore, /electron-builder/);
   assert.match(gitignore, /desktop.*log|log.*desktop/i);
 });
+
+test('built renderer entry uses relative asset URLs for Electron loadFile', () => {
+  const distIndexPath = path.join(root, 'dist', 'index.html');
+  assert.ok(fs.existsSync(distIndexPath), 'run npm run build before packaging checks');
+  const html = fs.readFileSync(distIndexPath, 'utf8');
+  const references = [...html.matchAll(/\b(?:src|href)="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((reference) => reference.includes('assets/'));
+
+  assert.ok(references.length > 0, 'built index must reference emitted assets');
+  for (const reference of references) {
+    assert.match(reference, /^\.\/assets\//, `asset URL must be relative: ${reference}`);
+  }
+});
+
+test('built PDF.js worker is emitted and referenced with a relative URL', () => {
+  const assetsDir = path.join(root, 'dist', 'assets');
+  assert.ok(fs.existsSync(assetsDir), 'run npm run build before packaging checks');
+  const assetFiles = fs.readdirSync(assetsDir);
+  const workerFile = assetFiles.find((file) => /^pdf\.worker(?:\.[^.]*)?-.+\.mjs$/.test(file));
+  assert.ok(workerFile, 'Vite build must emit the PDF.js worker module');
+
+  const bundles = assetFiles
+    .filter((file) => /\.(?:js|mjs)$/.test(file))
+    .map((file) => fs.readFileSync(path.join(assetsDir, file), 'utf8'))
+    .join('\n');
+  // Vite keeps this import relative to the JavaScript chunk by using
+  // `new URL('<worker>', import.meta.url)`; this is file://-safe under loadFile.
+  const workerReference = bundles.match(/new URL\(`(pdf\.worker[^`]+\.mjs)`,import\.meta\.url\)/);
+  assert.ok(workerReference, 'application bundle must reference the emitted PDF.js worker');
+  assert.equal(workerReference[1], workerFile);
+  assert.ok(fs.existsSync(path.join(assetsDir, workerReference[1])));
+});
