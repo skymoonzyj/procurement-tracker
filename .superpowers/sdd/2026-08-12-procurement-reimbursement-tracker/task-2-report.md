@@ -51,4 +51,4 @@
 - `npm run test:run -- src/domain`：3 files passed，11 tests passed。
 - `npm run typecheck`：通过，`tsc --noEmit` 无错误。
 
-修复 commit：`ab2e040611f0f91b5501ce7d04312e05d8a85f4f`
+修复 commit：`47e7e04ad2a78b55457a6c4e45a35e1bbf1b249f`
