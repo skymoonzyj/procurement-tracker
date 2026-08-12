@@ -28,5 +28,22 @@ The first RED run exposed a test harness seam: rendering `App` inside an outer `
 
 ## Concerns
 
-- Vitest/jsdom emits the existing informational warning `Not implemented: navigation to another Document` when the backup anchor is clicked; assertions still pass.
+- The earlier jsdom navigation warning is resolved by stubbing the anchor click while retaining link assertions.
 - No automated screenshot runner is configured; responsive rules were reviewed against the 1440px/390px breakpoints in CSS.
+
+## Review follow-up
+
+- Refresh coverage now mutates the repository snapshot from ¥40.00 to ¥55.00, asserts `purchaseRepo.list` is called again, and verifies the provider adopts the repository total before continuing.
+- The production context probe now verifies both sides of a confirmed match: the purchase has `invoiceStatus: matched` and contains the invoice ID, while the confirmed invoice contains the purchase ID.
+- Backup coverage captures and parses the generated JSON blob. It verifies the reimbursed and pending purchases, confirmed invoice, and bidirectional IDs before asserting URL cleanup.
+- The download anchor click is stubbed without navigation while retaining assertions for click count, blob href, and generated filename. Targeted and full Vitest output are now pristine.
+- The transparent file input now exposes a `:focus-within` outline (`#a84434`, 3px with 3px offset).
+- Warm accessible text colors were deepened: candidate score `#625e57` (6.45:1 on white), invoice metadata term `#686259` (6.03:1), and table link `#994434` (6.50:1). The focus outline is 5.93:1 on white.
+
+### Fresh verification after review fixes
+
+- `npm run test:run -- src/test/app-flow.test.tsx` — 1 file, 1 test passed; no warnings.
+- `npm run test:run` — 17 files, 58 tests passed; no warnings.
+- `npm run typecheck` — exit 0.
+- `npm run build` — exit 0; 45 modules transformed.
+- `git diff --check` — exit 0.
