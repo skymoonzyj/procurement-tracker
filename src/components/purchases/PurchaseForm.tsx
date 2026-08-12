@@ -11,11 +11,18 @@ export function PurchaseForm({ initialValue, onSubmit, onCancel }: PurchaseFormP
   const [saving, setSaving] = useState(false)
   useEffect(() => { setValue(initialValue ?? blank); setErrors({}) }, [initialValue])
   const update = (key: keyof PurchaseInput, next: string) => setValue(prev => ({ ...prev, [key]: next }))
-  const quantity = Number(value.quantity); const cents = Number(value.unitPriceCents)
-  const preview = Number.isFinite(quantity) && quantity > 0 && Number.isFinite(cents) ? calculateTotalCents(quantity, cents) : 0
+  const quantity = Number(value.quantity)
+  let preview = 0
+  try {
+    const cents = typeof value.unitPriceCents === 'string' && value.unitPriceCents.trim() ? toCents(value.unitPriceCents) : Number(value.unitPriceCents)
+    if (Number.isFinite(quantity) && quantity > 0 && Number.isFinite(cents)) preview = calculateTotalCents(quantity, cents)
+  } catch { preview = 0 }
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    const next = { ...value, unitPriceCents: typeof value.unitPriceCents === 'string' && value.unitPriceCents ? toCents(value.unitPriceCents) : value.unitPriceCents }
+    let next: PurchaseInput = { ...value }
+    if (typeof value.unitPriceCents === 'string' && value.unitPriceCents.trim()) {
+      try { next = { ...value, unitPriceCents: toCents(value.unitPriceCents) } } catch { setErrors({ unitPriceCents: '单价不能为负数' }); return }
+    }
     const validation = validatePurchaseInput(next)
     if (Object.keys(validation).length) { setErrors(validation); return }
     setSaving(true)
