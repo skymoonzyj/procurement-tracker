@@ -31,6 +31,15 @@ function isLocalRendererUrl(value) {
   }
 }
 
+function isAllowedPopupUrl(value) {
+  try {
+    const protocol = new URL(value).protocol;
+    return protocol === 'blob:' || protocol === 'about:';
+  } catch {
+    return false;
+  }
+}
+
 function createMainWindow(options = {}) {
   const electron = options.electron || loadElectron();
   const app = options.app || electron.app;
@@ -58,6 +67,7 @@ function createMainWindow(options = {}) {
   const webContents = mainWindow.webContents;
   if (webContents && typeof webContents.setWindowOpenHandler === 'function') {
     webContents.setWindowOpenHandler(({ url }) => {
+      if (isAllowedPopupUrl(url)) return { action: 'allow' };
       if (isHttpUrl(url) && shell && typeof shell.openExternal === 'function') {
         Promise.resolve(shell.openExternal(url)).catch(() => {});
       }

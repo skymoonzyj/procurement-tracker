@@ -38,3 +38,17 @@ directory, which is ignored by the repository.
 No known concerns. Full Electron GUI launch was not attempted in this
 headless Node environment; the smoke test intentionally exercises the
 require-safe entry points only.
+
+## Follow-up protocol fix
+
+RED command: `node --test electron/main.smoke.test.cjs` (new protocol test
+failed because `blob:` popups returned `{ action: 'deny' }`).
+
+GREEN commands:
+
+- `node --test electron/main.smoke.test.cjs` — 4/4 passed.
+- `npm run typecheck` — exit code 0.
+
+The window-open policy now allows `blob:` and `about:` popup carriers for
+local invoice previews, while HTTP(S) URLs still open through
+`shell.openExternal` and all other protocols remain denied.

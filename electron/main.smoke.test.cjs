@@ -27,3 +27,41 @@ test('main process exports a window factory without loading Electron in Node', (
   assert.equal(typeof main.createMainWindow, 'function');
   assert.equal(typeof main.resolveRendererTarget, 'function');
 });
+
+test('window-open protocol policy allows local blob previews and opens only HTTP(S) externally', () => {
+  const { createMainWindow } = require('./main.cjs');
+  const decisions = {};
+  const opened = [];
+  const webContents = {
+    setWindowOpenHandler(handler) {
+      decisions.blob = handler({ url: 'blob:file:///invoice.pdf' });
+      decisions.blank = handler({ url: 'about:blank' });
+      decisions.https = handler({ url: 'https://example.com/invoice' });
+      decisions.javascript = handler({ url: 'javascript:alert(1)' });
+    },
+    on() {},
+  };
+  const window = {
+    webContents,
+    once() {},
+    loadFile() {},
+  };
+  const electron = {
+    BrowserWindow: function BrowserWindow() {
+      return window;
+    },
+    shell: {
+      openExternal(url) {
+        opened.push(url);
+      },
+    },
+  };
+
+  createMainWindow({ electron, app: { getAppPath: () => '/app' } });
+
+  assert.deepEqual(decisions.blob, { action: 'allow' });
+  assert.deepEqual(decisions.blank, { action: 'allow' });
+  assert.deepEqual(decisions.https, { action: 'deny' });
+  assert.deepEqual(decisions.javascript, { action: 'deny' });
+  assert.deepEqual(opened, ['https://example.com/invoice']);
+});
