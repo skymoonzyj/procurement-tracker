@@ -22,9 +22,13 @@ export function InvoiceCard({ invoice, progress, error, onRetry }: InvoiceCardPr
       const popup = window.open(url, '_blank')
       if (popup) {
         try { popup.opener = null } catch { /* cross-origin popup */ }
-        popup.addEventListener('load', cleanup, { once: true })
-        popup.addEventListener('error', cleanup, { once: true })
         fallback = window.setTimeout(cleanup, 60_000)
+        try {
+          popup.addEventListener('load', cleanup, { once: true })
+          popup.addEventListener('error', cleanup, { once: true })
+        } catch {
+          // Hostile WindowProxy: fallback timer remains responsible for cleanup.
+        }
       } else {
         // Some browsers return null for a successful noopener navigation. Keep
         // the URL alive until the fallback rather than revoking too early.

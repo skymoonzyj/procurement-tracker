@@ -39,4 +39,17 @@ describe('InvoiceCard object URL lifecycle', () => {
     expect(revoke).not.toHaveBeenCalledWith('blob:blocked')
     view.unmount()
   })
+
+  it('keeps URL until fallback when popup event registration throws', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:download').mockReturnValueOnce('blob:hostile')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const addEventListener = vi.fn(() => { throw new Error('WindowProxy unavailable') })
+    vi.spyOn(window, 'open').mockReturnValue({ addEventListener } as unknown as Window)
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
+    const view = render(<InvoiceCard invoice={invoice} />)
+    fireEvent.click(view.getByRole('button', { name: '预览 PDF' }))
+    expect(revoke).not.toHaveBeenCalledWith('blob:hostile')
+    expect(setTimeoutSpy.mock.calls[setTimeoutSpy.mock.calls.length - 1]?.[1]).toBeGreaterThanOrEqual(60_000)
+    view.unmount()
+  })
 })
