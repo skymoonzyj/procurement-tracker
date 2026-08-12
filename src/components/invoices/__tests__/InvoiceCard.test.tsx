@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InvoiceCard } from '../InvoiceCard'
 import type { InvoiceRecord } from '../../../domain/types'
@@ -10,15 +10,33 @@ const invoice: InvoiceRecord = {
 afterEach(() => vi.restoreAllMocks())
 
 describe('InvoiceCard object URL lifecycle', () => {
-  it('revokes download URL on unmount and preview URL after opening', async () => {
+  it('revokes preview URL on popup load and uses a long fallback timeout', () => {
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:download').mockReturnValueOnce('blob:preview')
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    vi.spyOn(window, 'open').mockReturnValue(null)
+    const addEventListener = vi.fn()
+    vi.spyOn(window, 'open').mockReturnValue({ addEventListener } as unknown as Window)
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
     const view = render(<InvoiceCard invoice={invoice} />)
     expect(create).toHaveBeenCalledTimes(1)
     fireEvent.click(view.getByRole('button', { name: '预览 PDF' }))
-    await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:preview'))
+    expect(revoke).not.toHaveBeenCalledWith('blob:preview')
+    const fallbackDelay = setTimeoutSpy.mock.calls[setTimeoutSpy.mock.calls.length - 1]?.[1]
+    expect(typeof fallbackDelay).toBe('number')
+    expect(fallbackDelay as number).toBeGreaterThanOrEqual(60_000)
+    const loadHandler = addEventListener.mock.calls[0]?.[1] as (() => void) | undefined
+    loadHandler?.()
+    expect(revoke).toHaveBeenCalledWith('blob:preview')
     view.unmount()
     expect(revoke).toHaveBeenCalledWith('blob:download')
+  })
+
+  it('revokes preview URL immediately when popup is blocked', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:download').mockReturnValueOnce('blob:blocked')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(window, 'open').mockReturnValue(null)
+    const view = render(<InvoiceCard invoice={invoice} />)
+    fireEvent.click(view.getByRole('button', { name: '预览 PDF' }))
+    expect(revoke).toHaveBeenCalledWith('blob:blocked')
+    view.unmount()
   })
 })

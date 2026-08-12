@@ -10,13 +10,25 @@ export function InvoiceCard({ invoice, progress, error, onRetry }: InvoiceCardPr
   useEffect(() => () => URL.revokeObjectURL(downloadUrl), [downloadUrl])
   const preview = () => {
     const url = URL.createObjectURL(invoice.blob)
+    let settled = false
+    let fallback: number | undefined
+    const cleanup = () => {
+      if (settled) return
+      settled = true
+      if (fallback != null) window.clearTimeout(fallback)
+      URL.revokeObjectURL(url)
+    }
     try {
       const popup = window.open(url, '_blank', 'noopener,noreferrer')
-      if (popup) popup.addEventListener?.('load', () => URL.revokeObjectURL(url), { once: true })
+      if (popup) {
+        popup.addEventListener('load', cleanup, { once: true })
+        popup.addEventListener('error', cleanup, { once: true })
+        fallback = window.setTimeout(cleanup, 60_000)
+      } else {
+        cleanup()
+      }
     } catch {
-      // Ignore popup errors; timeout below still releases the object URL.
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+      cleanup()
     }
   }
   return <article className="invoice-card">
