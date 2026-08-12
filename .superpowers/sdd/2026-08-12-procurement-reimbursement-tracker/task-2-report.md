@@ -37,4 +37,18 @@
 
 ## Commit
 
-`91836d02eea00b8f77e5e76cad135a1d91443718`
+初始实现 commit：`df2cf548b635119d5b0f65af1fe3575cca3dddae`
+
+## Review findings 修复
+
+- `validatePurchaseInput` 现在先 trim 并按整数分格式校验字符串单价，空白或小数文本会报错。
+- `formatCNY` 现在明确拒绝非整数分，避免 `Math.trunc` 静默丢弃小数。
+- 新增对应回归测试（空白/小数单价、分值小数格式化）。
+
+验证命令及实际输出：
+
+- `npm run test:run -- src/domain/__tests__/validation.test.ts src/domain/__tests__/money.test.ts`：2 files passed，9 tests passed。
+- `npm run test:run -- src/domain`：3 files passed，11 tests passed。
+- `npm run typecheck`：通过，`tsc --noEmit` 无错误。
+
+修复 commit：`ab2e040611f0f91b5501ce7d04312e05d8a85f4f`

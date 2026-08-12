@@ -13,4 +13,8 @@ describe('purchase validation', () => {
   it('returns an empty map for valid input', () => {
     expect(validatePurchaseInput(valid)).toEqual({})
   })
+  it('rejects blank or malformed unit price strings', () => {
+    expect(validatePurchaseInput({ ...valid, unitPriceCents: ' ' }).unitPriceCents).toBeTruthy()
+    expect(validatePurchaseInput({ ...valid, unitPriceCents: '12.34' }).unitPriceCents).toBeTruthy()
+  })
 })

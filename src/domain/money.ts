@@ -15,7 +15,7 @@ export function toCents(value: string | number): number {
 }
 
 export function formatCNY(cents: number): string {
-  if (!Number.isFinite(cents)) throw new Error('金额无效')
+  if (!Number.isFinite(cents) || !Number.isInteger(cents)) throw new Error('金额必须为整数分')
   const sign = cents < 0 ? '-' : ''
   const absolute = Math.abs(Math.trunc(cents))
   return `¥${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, '0')}`

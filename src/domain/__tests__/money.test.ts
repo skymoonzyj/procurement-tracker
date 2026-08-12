@@ -11,4 +11,8 @@ describe('money helpers', () => {
   it.each(['-1', 'abc', '', '1.234.5'])('rejects invalid value %s', (value) => {
     expect(() => toCents(value)).toThrow()
   })
+
+  it('rejects fractional cents when formatting', () => {
+    expect(() => formatCNY(1234.9)).toThrow()
+  })
 })
