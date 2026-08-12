@@ -19,13 +19,16 @@ export function InvoiceCard({ invoice, progress, error, onRetry }: InvoiceCardPr
       URL.revokeObjectURL(url)
     }
     try {
-      const popup = window.open(url, '_blank', 'noopener,noreferrer')
+      const popup = window.open(url, '_blank')
       if (popup) {
+        try { popup.opener = null } catch { /* cross-origin popup */ }
         popup.addEventListener('load', cleanup, { once: true })
         popup.addEventListener('error', cleanup, { once: true })
         fallback = window.setTimeout(cleanup, 60_000)
       } else {
-        cleanup()
+        // Some browsers return null for a successful noopener navigation. Keep
+        // the URL alive until the fallback rather than revoking too early.
+        fallback = window.setTimeout(cleanup, 60_000)
       }
     } catch {
       cleanup()

@@ -30,13 +30,13 @@ describe('InvoiceCard object URL lifecycle', () => {
     expect(revoke).toHaveBeenCalledWith('blob:download')
   })
 
-  it('revokes preview URL immediately when popup is blocked', () => {
+  it('keeps preview URL alive when browser returns null for a successful navigation', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValueOnce('blob:download').mockReturnValueOnce('blob:blocked')
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
     vi.spyOn(window, 'open').mockReturnValue(null)
     const view = render(<InvoiceCard invoice={invoice} />)
     fireEvent.click(view.getByRole('button', { name: '预览 PDF' }))
-    expect(revoke).toHaveBeenCalledWith('blob:blocked')
+    expect(revoke).not.toHaveBeenCalledWith('blob:blocked')
     view.unmount()
   })
 })
