@@ -35,6 +35,27 @@ const invoice: InvoiceRecord = {
 }
 
 describe('backup serialization', () => {
+  it('rejects invalid exportedAt and incomplete required purchase metadata', async () => {
+    const valid = await serializeBackup({ purchases: [purchase], invoices: [] })
+    await expect(restoreBackup({ ...valid, exportedAt: 'not-a-date' })).rejects.toThrow(/导出时间/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], itemName: '' }] })).rejects.toThrow(/采购记录/)
+    await expect(restoreBackup({ ...valid, purchases: [{ ...valid.purchases[0], purchasedAt: '2026-02-31' }] })).rejects.toThrow(/采购记录/)
+  })
+
+  it('rejects non-canonical invoice base64 and size mismatches', async () => {
+    const valid = await serializeBackup({ purchases: [], invoices: [invoice] })
+    await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], blobBase64: 'AQI' }] })).rejects.toThrow(/发票记录/)
+    await expect(restoreBackup({ ...valid, invoices: [{ ...valid.invoices[0], sizeBytes: 99 }] })).rejects.toThrow(/发票记录/)
+  })
+
+  it('rejects malformed purchase records before restore', async () => {
+    await expect(restoreBackup({ version: 1, exportedAt: '2026-08-12T00:00:00.000Z', purchases: [{ id: 'x', quantity: -1 }], invoices: [] })).rejects.toThrow(/采购记录/)
+  })
+
+  it('rejects malformed invoice records before restore', async () => {
+    await expect(restoreBackup({ version: 1, exportedAt: '2026-08-12T00:00:00.000Z', purchases: [], invoices: [{ id: 'x', fileName: 'x.pdf', mimeType: 'text/plain', blobBase64: '###' }] })).rejects.toThrow(/发票记录/)
+  })
+
   it('round-trips cents, reimbursement state, links, and invoice bytes', async () => {
     const backup = await serializeBackup({ purchases: [purchase], invoices: [invoice] })
     expect(backup.version).toBe(1)
@@ -47,6 +68,19 @@ describe('backup serialization', () => {
     expect(restored.purchases[0].invoiceIds).toEqual(['invoice-1'])
     const bytes = new Uint8Array(await restored.invoices[0].blob.arrayBuffer())
     expect([...bytes]).toEqual([1, 2, 3, 255])
+  })
+
+  it('round-trips a normal purchase with no invoice IDs', async () => {
+    const noInvoice = { ...purchase, invoiceIds: [], invoiceStatus: 'missing' as const }
+    const backup = await serializeBackup({ purchases: [noInvoice], invoices: [] })
+    const restored = await restoreBackup(backup)
+    expect(restored.purchases[0].invoiceIds).toEqual([])
+    expect(restored.purchases[0].invoiceStatus).toBe('missing')
+  })
+
+  it('accepts decimal quantities representable to two places', async () => {
+    const backup = await serializeBackup({ purchases: [{ ...purchase, quantity: 0.29, invoiceIds: [] }], invoices: [] })
+    await expect(restoreBackup(backup)).resolves.toBeTruthy()
   })
 
   it('exposes snapshot persistence as one atomic operation', () => {
