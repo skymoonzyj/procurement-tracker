@@ -94,7 +94,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             return { ...purchase, invoiceIds: purchase.invoiceIds.includes(action.invoiceId) ? purchase.invoiceIds : [...purchase.invoiceIds, action.invoiceId], invoiceStatus: 'matched' }
           }
           if (!purchase.invoiceIds.includes(action.invoiceId)) return purchase
-          return { ...purchase, invoiceIds: purchase.invoiceIds.filter((id) => id !== action.invoiceId), invoiceStatus: 'missing' }
+          const invoiceIds = purchase.invoiceIds.filter((id) => id !== action.invoiceId)
+          return { ...purchase, invoiceIds, invoiceStatus: invoiceIds.length ? 'attached' : 'missing' }
         }),
         persistenceError: undefined,
       })
