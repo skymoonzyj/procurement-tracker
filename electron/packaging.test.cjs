@@ -50,9 +50,10 @@ test('Electron development launcher exists and manages child processes', () => {
 });
 
 test('launcher waits for a reachable loopback HTTP endpoint and reports timeout', async () => {
-  const { waitForHttp, signalExitCode } = require('./dev.cjs');
+  const { waitForHttp, signalExitCode, classifyViteExit } = require('./dev.cjs');
   assert.equal(signalExitCode('SIGINT'), 130);
   assert.equal(signalExitCode('SIGTERM'), 143);
+  assert.equal(classifyViteExit({ shuttingDown: false, viteReady: true, code: 7 }).kind, 'runtime-failure');
   const server = http.createServer((_request, response) => {
     response.statusCode = server.ready ? 200 : 503;
     response.end();
@@ -70,6 +71,25 @@ test('launcher waits for a reachable loopback HTTP endpoint and reports timeout'
     waitForHttp('http://127.0.0.1:1', { timeoutMs: 30, intervalMs: 5 }),
     /Timed out waiting for Vite server at http:\/\/127\.0\.0\.1:1/,
   );
+});
+
+test('aborting readiness polling stops delayed responses from scheduling more requests', async () => {
+  const { waitForHttp } = require('./dev.cjs');
+  let requests = 0;
+  const server = http.createServer((_request, response) => {
+    requests += 1;
+    setTimeout(() => { response.statusCode = 503; response.end(); }, 20);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const controller = new AbortController();
+  const pending = waitForHttp(`http://127.0.0.1:${address.port}`, { timeoutMs: 500, intervalMs: 5, signal: controller.signal });
+  setTimeout(() => controller.abort(), 8);
+  await assert.rejects(pending, /Cancelled waiting for Vite server/);
+  const countAfterAbort = requests;
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(requests, countAfterAbort);
+  await new Promise((resolve) => server.close(resolve));
 });
 
 test('required Electron entrypoint and ignore rules exist', () => {

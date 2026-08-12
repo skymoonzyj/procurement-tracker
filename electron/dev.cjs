@@ -12,30 +12,37 @@ function waitForHttp(url, { timeoutMs = 30_000, intervalMs = 100, signal } = {})
   return new Promise((resolve, reject) => {
     let settled = false;
     let timer;
+    let currentRequest;
     const finish = (error) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (currentRequest) currentRequest.destroy();
       error ? reject(error) : resolve();
     };
     if (signal) {
       if (signal.aborted) return finish(new Error(`Cancelled waiting for Vite server at ${url}`));
       signal.addEventListener('abort', () => finish(new Error(`Cancelled waiting for Vite server at ${url}`)), { once: true });
     }
+    const schedule = () => {
+      if (!settled && !(signal && signal.aborted)) timer = setTimeout(poll, intervalMs);
+    };
     const poll = () => {
+      if (settled || (signal && signal.aborted)) return;
       if (Date.now() >= deadline) {
         finish(new Error(`Timed out waiting for Vite server at ${url} after ${timeoutMs}ms`));
         return;
       }
-      const request = http.get(url, (response) => {
+      const request = currentRequest = http.get(url, (response) => {
+        if (settled) return response.resume();
         response.resume();
         if (response.statusCode && response.statusCode < 500) {
           finish();
         } else {
-          request.once('close', () => { timer = setTimeout(poll, intervalMs); });
+          request.once('close', schedule);
         }
       });
-      request.once('error', () => { timer = setTimeout(poll, intervalMs); });
+      request.once('error', schedule);
       request.setTimeout(Math.min(intervalMs, 250), () => request.destroy());
     };
     poll();
@@ -68,6 +75,12 @@ function signalExitCode(signal) {
   return { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal] || 1;
 }
 
+function classifyViteExit({ shuttingDown, viteReady, code, signal }) {
+  if (shuttingDown) return { kind: 'ignore', exitCode: 0 };
+  if (!viteReady) return { kind: 'early-failure', exitCode: 1, message: `Vite exited before readiness (code=${code}, signal=${signal || 'none'})` };
+  return { kind: 'runtime-failure', exitCode: code || signalExitCode(signal) };
+}
+
 async function launch() {
   const env = { ...process.env, ELECTRON_START_URL: startUrl };
   const vite = spawn(npmCommand, ['run', 'dev', '--', '--host', host, '--port', port], {
@@ -90,7 +103,9 @@ async function launch() {
   }
   const viteExit = new Promise((_, reject) => {
     vite.once('exit', (code, signal) => {
-      if (!shuttingDown && !viteReady) reject(new Error(`Vite exited before readiness (code=${code}, signal=${signal || 'none'})`));
+      const action = classifyViteExit({ shuttingDown, viteReady, code, signal });
+      if (action.kind === 'early-failure') reject(new Error(action.message));
+      if (action.kind === 'runtime-failure') void cleanup(action.exitCode);
     });
   });
 
@@ -110,4 +125,4 @@ if (require.main === module) {
   void launch();
 }
 
-module.exports = { waitForHttp, stopChild, signalExitCode };
+module.exports = { waitForHttp, stopChild, signalExitCode, classifyViteExit };
