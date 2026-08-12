@@ -63,4 +63,24 @@ describe('AppProvider hydration errors', () => {
     expect(modulePersistSpy).toHaveBeenCalledTimes(1)
     expect(modulePersistSpy).toHaveBeenCalledWith(expect.objectContaining({ purchases: expect.arrayContaining([expect.objectContaining({ id: 'queued' })]) }))
   })
+
+  it('preserves replayed queued edits when a failed write is followed by refresh', async () => {
+    vi.spyOn(purchaseRepo, 'list').mockRejectedValueOnce(new Error('first read failed')).mockResolvedValue([purchase])
+    vi.spyOn(invoiceRepo, 'list').mockRejectedValueOnce(new Error('first read failed')).mockResolvedValue([])
+    const modulePersistSpy = vi.spyOn(db, 'persistSnapshot')
+      .mockRejectedValueOnce(new Error('queued write failed'))
+      .mockResolvedValue(undefined)
+    render(<AppProvider><InitialHydrationProbe /></AppProvider>)
+
+    fireEvent.click(screen.getByRole('button', { name: '排队新增' }))
+    await waitFor(() => expect(screen.getByTestId('hydration-error')).toHaveTextContent('first read failed'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: '重试加载' })[0])
+    await waitFor(() => expect(screen.getByTestId('hydration-records')).toHaveTextContent('existing,queued'))
+    await waitFor(() => expect(screen.getByTestId('hydration-error')).toHaveTextContent('queued write failed'))
+
+    fireEvent.click(screen.getAllByRole('button', { name: '重试加载' })[0])
+    await waitFor(() => expect(modulePersistSpy).toHaveBeenCalledTimes(2))
+    expect(screen.getByTestId('hydration-records')).toHaveTextContent('existing,queued')
+  })
 })
