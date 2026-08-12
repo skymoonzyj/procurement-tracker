@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const http = require('node:http');
 
 const root = path.resolve(__dirname, '..');
 const packageJsonPath = path.join(root, 'package.json');
@@ -46,6 +47,29 @@ test('Electron development launcher exists and manages child processes', () => {
   assert.match(launcher, /127\.0\.0\.1/);
   assert.match(launcher, /spawn/);
   assert.match(launcher, /kill/);
+});
+
+test('launcher waits for a reachable loopback HTTP endpoint and reports timeout', async () => {
+  const { waitForHttp, signalExitCode } = require('./dev.cjs');
+  assert.equal(signalExitCode('SIGINT'), 130);
+  assert.equal(signalExitCode('SIGTERM'), 143);
+  const server = http.createServer((_request, response) => {
+    response.statusCode = server.ready ? 200 : 503;
+    response.end();
+  });
+  server.ready = false;
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const url = `http://127.0.0.1:${address.port}`;
+  const pending = waitForHttp(url, { timeoutMs: 500, intervalMs: 10 });
+  setTimeout(() => { server.ready = true; }, 35);
+  await pending;
+  await new Promise((resolve) => server.close(resolve));
+
+  await assert.rejects(
+    waitForHttp('http://127.0.0.1:1', { timeoutMs: 30, intervalMs: 5 }),
+    /Timed out waiting for Vite server at http:\/\/127\.0\.0\.1:1/,
+  );
 });
 
 test('required Electron entrypoint and ignore rules exist', () => {
