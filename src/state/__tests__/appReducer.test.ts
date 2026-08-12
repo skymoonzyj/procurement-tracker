@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { appReducer, initialAppState } from '../appReducer'
-import type { PurchaseRecord } from '../../domain/types'
+import type { InvoiceRecord, PurchaseRecord } from '../../domain/types'
 
 const makePurchase = (id: string, reimbursed = false): PurchaseRecord => ({
   id,
@@ -65,5 +65,19 @@ describe('appReducer', () => {
     }
     const next = appReducer(state, { type: 'removeInvoice', id: 'invoice-1' })
     expect(next.purchases[0].invoiceStatus).toBe('needs_review')
+  })
+
+  it('keeps matched status when confirming another invoice leaves a confirmed link', () => {
+    const invoice = (id: string, matchedPurchaseIds: string[], matchStatus: InvoiceRecord['matchStatus']): InvoiceRecord => ({
+      id, fileName: `${id}.pdf`, mimeType: 'application/pdf', sizeBytes: 1, blob: new Blob(['pdf'], { type: 'application/pdf' }), uploadedAt: '2026-08-01T00:00:00.000Z', rawText: '', parseStatus: 'parsed', matchStatus, matchedPurchaseIds,
+    })
+    const state = {
+      ...initialAppState,
+      purchases: [{ ...makePurchase('a'), invoiceStatus: 'matched' as const, invoiceIds: ['invoice-1', 'invoice-2'] }],
+      invoices: [invoice('invoice-1', ['a'], 'confirmed'), invoice('invoice-2', ['a'], 'confirmed')],
+    }
+    const next = appReducer(state, { type: 'confirmInvoiceMatch', invoiceId: 'invoice-1', purchaseIds: [] })
+    expect(next.purchases[0].invoiceIds).toEqual(['invoice-2'])
+    expect(next.purchases[0].invoiceStatus).toBe('matched')
   })
 })

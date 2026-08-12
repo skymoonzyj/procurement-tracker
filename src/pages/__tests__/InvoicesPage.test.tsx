@@ -76,4 +76,24 @@ describe('invoice center interactions', () => {
     fireEvent.change(screen.getByLabelText('搜索采购记录'), { target: { value: '办公' } })
     expect(screen.getByText('办公椅')).toBeInTheDocument()
   })
+
+  it('reports persistence failure instead of claiming a successful match', async () => {
+    vi.mocked(db.persistSnapshot).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValue(new Error('disk full'))
+    render(<AppProvider><InvoicesPage /></AppProvider>)
+    await waitFor(() => expect(screen.getByRole('heading', { name: '发票中心' })).toBeInTheDocument())
+    const file = new File(['%PDF-1.7'], 'failed-match.pdf', { type: 'application/pdf' })
+    fireEvent.change(screen.getByLabelText('上传 PDF 发票'), { target: { files: [file] } })
+    const candidate = await screen.findByText('办公椅')
+    fireEvent.click(within(candidate.closest('[data-purchase-row]') as HTMLElement).getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: '确认匹配' }))
+    expect(await screen.findByText(/匹配保存失败/)).toBeInTheDocument()
+  })
+
+  it('shows retry for a persisted failed invoice after refresh', async () => {
+    vi.mocked(db.invoiceRepo.list).mockResolvedValue([{
+      id: 'failed', fileName: 'persisted-failed.pdf', mimeType: 'application/pdf', sizeBytes: 1, blob: new Blob(['bad'], { type: 'application/pdf' }), uploadedAt: '2026-08-01T00:00:00.000Z', rawText: '', parseStatus: 'failed', matchStatus: 'needs_review', matchedPurchaseIds: [],
+    }])
+    render(<AppProvider><InvoicesPage /></AppProvider>)
+    await waitFor(() => expect(screen.getByRole('button', { name: '重试解析 persisted-failed.pdf' })).toBeInTheDocument())
+  })
 })

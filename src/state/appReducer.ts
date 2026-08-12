@@ -95,7 +95,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           }
           if (!purchase.invoiceIds.includes(action.invoiceId)) return purchase
           const invoiceIds = purchase.invoiceIds.filter((id) => id !== action.invoiceId)
-          return { ...purchase, invoiceIds, invoiceStatus: invoiceIds.length ? 'attached' : 'missing' }
+          const hasConfirmedRemaining = invoiceIds.some((invoiceId) => state.invoices.find((invoice) => invoice.id === invoiceId)?.matchStatus === 'confirmed')
+          return { ...purchase, invoiceIds, invoiceStatus: invoiceIds.length === 0 ? 'missing' : hasConfirmedRemaining ? 'matched' : 'attached' }
         }),
         persistenceError: undefined,
       })
