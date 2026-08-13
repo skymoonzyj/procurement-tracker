@@ -62,6 +62,17 @@ test('macOS packaging targets Universal DMG and ZIP artifacts', () => {
   assert.notEqual(pkg.build.dmg.artifactName, pkg.build.zip.artifactName);
 });
 
+test('ELECTRON.md documents macOS development and distribution', () => {
+  const electronDoc = fs.readFileSync(path.join(root, 'ELECTRON.md'), 'utf8');
+  assert.match(electronDoc, /npm run dev:desktop/);
+  assert.match(electronDoc, /npm run dist:mac/);
+  assert.match(electronDoc, /mac-universal-dmg/);
+  assert.match(electronDoc, /mac-universal-zip/);
+  assert.match(electronDoc, /Intel/);
+  assert.match(electronDoc, /Apple Silicon/);
+  assert.match(electronDoc, /无法验证开发者|Gatekeeper/);
+});
+
 test('Electron development launcher exists and manages child processes', () => {
   const launcherPath = path.join(root, 'electron', 'dev.cjs');
   assert.ok(fs.existsSync(launcherPath));
