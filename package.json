@@ -65,13 +65,11 @@
           ]
         }
       ],
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "artifactName": "${productName}-${version}-mac-universal-zip.${ext}"
     },
     "dmg": {
       "artifactName": "${productName}-${version}-mac-universal-dmg.${ext}"
-    },
-    "zip": {
-      "artifactName": "${productName}-${version}-mac-universal-zip.${ext}"
     },
     "nsis": {
       "artifactName": "${productName}-${version}-${os}-${arch}-nsis.${ext}",

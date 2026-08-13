@@ -82,3 +82,23 @@ lipo -info 'release/mac-universal/采购报销台账.app/Contents/MacOS/采购�
 ```
 
 Artifacts are unsigned; Gatekeeper may warn or block first launch until the app is explicitly allowed (or signed/notarized in a release environment).
+
+## Configuration regression fix
+
+The packaging test initially failed after asserting that `build.mac.artifactName` must provide the ZIP fallback and that no root `build.zip` block exists. The fix removes the unsupported root `zip` configuration and sets:
+
+```json
+"mac": {
+  "artifactName": "${productName}-${version}-mac-universal-zip.${ext}"
+},
+"dmg": {
+  "artifactName": "${productName}-${version}-mac-universal-dmg.${ext}"
+}
+```
+
+After the fix:
+
+* `node --test electron/packaging.test.cjs`: 9 passed, 0 failed.
+* `npm run build`: exit 0.
+* `npm run typecheck`: exit 0.
+* A second `npm run dist:mac` passed configuration validation and then correctly stopped with `Build for macOS is supported only on macOS`; a macOS runner remains required for artifacts.

@@ -57,9 +57,11 @@ test('macOS packaging targets Universal DMG and ZIP artifacts', () => {
   assert.deepEqual(macTargets.map((target) => target.target), ['dmg', 'zip']);
   for (const target of macTargets) assert.deepEqual(target.arch, ['universal']);
   assert.equal(pkg.build.mac.category, 'public.app-category.business');
+  assert.equal(typeof pkg.build.mac.artifactName, 'string');
+  assert.match(pkg.build.mac.artifactName, /mac-universal-zip/);
   assert.match(pkg.build.dmg.artifactName, /mac-universal-dmg/);
-  assert.match(pkg.build.zip.artifactName, /mac-universal-zip/);
-  assert.notEqual(pkg.build.dmg.artifactName, pkg.build.zip.artifactName);
+  assert.equal(pkg.build.zip, undefined, 'electron-builder does not support a root zip configuration block');
+  assert.notEqual(pkg.build.dmg.artifactName, pkg.build.mac.artifactName);
 });
 
 test('ELECTRON.md documents macOS development and distribution', () => {
