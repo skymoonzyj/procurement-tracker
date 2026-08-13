@@ -47,6 +47,21 @@ test('Electron packaging metadata and scripts are configured', () => {
   assert.equal(build.nsis.deleteAppDataOnUninstall, false);
 });
 
+test('macOS packaging targets Universal DMG and ZIP artifacts', () => {
+  const pkg = readPackage();
+  assert.match(pkg.scripts['dist:mac'], /npm run build/);
+  assert.match(pkg.scripts['dist:mac'], /electron-builder/);
+  assert.match(pkg.scripts['dist:mac'], /--mac/);
+  assert.match(pkg.scripts['dist:mac'], /--universal/);
+  const macTargets = Array.isArray(pkg.build.mac.target) ? pkg.build.mac.target : [pkg.build.mac.target];
+  assert.deepEqual(macTargets.map((target) => target.target), ['dmg', 'zip']);
+  for (const target of macTargets) assert.deepEqual(target.arch, ['universal']);
+  assert.equal(pkg.build.mac.category, 'public.app-category.business');
+  assert.match(pkg.build.dmg.artifactName, /mac-universal-dmg/);
+  assert.match(pkg.build.zip.artifactName, /mac-universal-zip/);
+  assert.notEqual(pkg.build.dmg.artifactName, pkg.build.zip.artifactName);
+});
+
 test('Electron development launcher exists and manages child processes', () => {
   const launcherPath = path.join(root, 'electron', 'dev.cjs');
   assert.ok(fs.existsSync(launcherPath));

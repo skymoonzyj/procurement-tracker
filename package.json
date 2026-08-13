@@ -9,6 +9,7 @@
     "dev:desktop": "node electron/dev.cjs",
     "build": "vite build",
     "dist:win": "npm run build && electron-builder --win nsis portable",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --universal",
     "typecheck": "tsc --noEmit",
     "test:run": "vitest run"
   },
@@ -48,6 +49,29 @@
         "nsis",
         "portable"
       ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.business"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-universal-dmg.${ext}"
+    },
+    "zip": {
+      "artifactName": "${productName}-${version}-mac-universal-zip.${ext}"
     },
     "nsis": {
       "artifactName": "${productName}-${version}-${os}-${arch}-nsis.${ext}",
