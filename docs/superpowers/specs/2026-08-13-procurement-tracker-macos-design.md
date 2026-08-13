@@ -11,8 +11,8 @@
 ## 交付物
 
 - `npm run dist:mac`：构建 Universal macOS 应用。
-- `采购报销台账-1.0.0-mac-universal.dmg`：推荐给普通用户安装。
-- `采购报销台账-1.0.0-mac-universal.zip`：便携分发和测试使用。
+- `采购报销台账-1.0.0-mac-universal-dmg.dmg`：推荐给普通用户安装。
+- `采购报销台账-1.0.0-mac-universal-zip.zip`：便携分发和测试使用。
 - `npm run dev:desktop`：macOS 开发启动方式保持与 Windows 一致。
 - `ELECTRON.md`：增加 macOS 构建、运行、首次打开和签名说明。
 
