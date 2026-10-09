@@ -52,6 +52,31 @@ The release contains an NSIS installer (`*-nsis.exe`) and a portable executable 
 
 The NSIS installer permits choosing an installation directory and creates Desktop and Start Menu shortcuts. Uninstall preserves the app's user data (`deleteAppDataOnUninstall: false`).
 
+## macOS development and distribution
+
+On macOS, install dependencies from the repository root and start the desktop development build with:
+
+```bash
+npm run dev:desktop
+```
+
+Build the production renderer and Universal macOS targets with:
+
+```bash
+npm run dist:mac
+```
+
+The Universal build combines Intel x64 and Apple Silicon arm64 in one app. It produces these files in `release/`:
+
+```text
+采购报销台账-1.0.0-mac-universal-dmg.dmg
+采购报销台账-1.0.0-mac-universal-zip.zip
+```
+
+A real Universal build must run on macOS; a Windows or Linux build host cannot validate the signed app bundle or produce a trustworthy macOS release. The current artifacts are unsigned. On first opening, right-click the app and choose **打开**, or use **系统设置 → 隐私与安全性 → 仍要打开** when macOS reports that it无法验证开发者 (Gatekeeper). Public distribution requires an Apple Developer ID signature and Apple notarization.
+
+macOS stores local IndexedDB data at `~/Library/Application Support/采购报销台账/`. Use **设置 → 备份与恢复 → 导出备份** to create a backup before moving machines or clearing data. Deleting the app does not intentionally remove this app-data directory, so uninstalling the application alone is not a data-erasure operation.
+
 ## Local data and backups
 
 Data is stored in IndexedDB for the current Windows user under Electron's per-user app-data directory (normally `%APPDATA%\\采购报销台账\\`, with Chromium IndexedDB files below that directory). Another Windows user has a separate dataset. No business data is sent to a server or cloud by this app.

@@ -47,6 +47,34 @@ test('Electron packaging metadata and scripts are configured', () => {
   assert.equal(build.nsis.deleteAppDataOnUninstall, false);
 });
 
+test('macOS packaging targets Universal DMG and ZIP artifacts', () => {
+  const pkg = readPackage();
+  assert.match(pkg.scripts['dist:mac'], /npm run build/);
+  assert.match(pkg.scripts['dist:mac'], /electron-builder/);
+  assert.match(pkg.scripts['dist:mac'], /--mac/);
+  assert.match(pkg.scripts['dist:mac'], /--universal/);
+  const macTargets = Array.isArray(pkg.build.mac.target) ? pkg.build.mac.target : [pkg.build.mac.target];
+  assert.deepEqual(macTargets.map((target) => target.target), ['dmg', 'zip']);
+  for (const target of macTargets) assert.deepEqual(target.arch, ['universal']);
+  assert.equal(pkg.build.mac.category, 'public.app-category.business');
+  assert.equal(typeof pkg.build.mac.artifactName, 'string');
+  assert.match(pkg.build.mac.artifactName, /mac-universal-zip/);
+  assert.match(pkg.build.dmg.artifactName, /mac-universal-dmg/);
+  assert.equal(pkg.build.zip, undefined, 'electron-builder does not support a root zip configuration block');
+  assert.notEqual(pkg.build.dmg.artifactName, pkg.build.mac.artifactName);
+});
+
+test('ELECTRON.md documents macOS development and distribution', () => {
+  const electronDoc = fs.readFileSync(path.join(root, 'ELECTRON.md'), 'utf8');
+  assert.match(electronDoc, /npm run dev:desktop/);
+  assert.match(electronDoc, /npm run dist:mac/);
+  assert.match(electronDoc, /mac-universal-dmg/);
+  assert.match(electronDoc, /mac-universal-zip/);
+  assert.match(electronDoc, /Intel/);
+  assert.match(electronDoc, /Apple Silicon/);
+  assert.match(electronDoc, /无法验证开发者|Gatekeeper/);
+});
+
 test('Electron development launcher exists and manages child processes', () => {
   const launcherPath = path.join(root, 'electron', 'dev.cjs');
   assert.ok(fs.existsSync(launcherPath));
